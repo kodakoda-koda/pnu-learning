@@ -58,7 +58,7 @@ class PNULoss:
 
     def Risk_PNU(self, t: Tensor, y: Tensor) -> Tensor:
         """
-        t: Target data as 1 for positive, -1 for negative, and 0 for unlabeled
+        t: Target as 1 for positive, -1 for negative, and 0 for unlabeled
         y: Prediction
         """
         t = t.flatten()
@@ -72,14 +72,15 @@ class PNULoss:
 class Multi_PNULoss:
     """
     Args:
-        p_ratio (float): Percentage of positive data
+        p_ratio (float): Percentage of belinging to each category
         eta (float): Hyperparameters that take the values between 0 and 1
     """
 
-    def __init__(self, loss_func: nn.Module, p_ratio: float, eta: float) -> None:
+    def __init__(self, loss_func: nn.Module, p_ratio: Tensor, eta: float) -> None:
         self.loss_func = loss_func
-        self.p_ratio = p_ratio  # shape注意
-        self.eta = eta  # 0~1
+        self.p_ratio = p_ratio
+        self.eta = eta
+        assert type(self.p_ratio) == torch.Tensor, "p_ratio must be Tensor"
 
     def Risk_P_plus(self, t: Tensor, y: Tensor) -> Tensor:
         y_plus = y.clone()
@@ -100,6 +101,8 @@ class Multi_PNULoss:
         return self.loss_func(-y_U).sum(dim=0) / n_U
 
     def Risk_PN(self, t: Tensor, y: Tensor) -> Tensor:
+        assert self.p_ratio.shape == t.sum(dim=0).shape, f"p_ratio must be shape as {t.sum(dim=0).shape}"
+
         risk_PN = self.p_ratio * self.Risk_P_plus(t, y)
         return risk_PN.sum()
 
@@ -109,7 +112,7 @@ class Multi_PNULoss:
 
     def Risk_PNU(self, t: Tensor, y: Tensor) -> Tensor:
         """
-        t: Target data as 1 for positive, -1 for negative, and 0 for unlabeled
+        t: Target
         y: Prediction
         """
         return (1 - self.eta) * self.Risk_PN(t, y) + self.eta * self.Risk_PU(t, y)
