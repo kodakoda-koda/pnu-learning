@@ -1,5 +1,3 @@
-from typing import Type
-
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
@@ -25,7 +23,7 @@ class Exp:
                 labels = itr['labels']
 
                 output = self.model(input_ids, attention_mask)
-                loss = loss_func(labels, output)
+                loss = loss_func(labels, output) # このloss_funcをどう定義するか
 
                 losses.append(loss.item())
                 loss.backward()
