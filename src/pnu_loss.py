@@ -4,16 +4,16 @@ from torch import Tensor
 
 
 class PNULoss:
-    """
-    Args:
-        p_ratio (float): Percentage of positive data
-        eta (float): Hyperparameters that take the values between 0 and 1
-    """
-
-    def __init__(self, loss_func: nn.Module, p_ratio: float, eta: float) -> None:
-        self.loss_func = loss_func
+    def __init__(self, p_ratio: float, eta: float, loss_func: nn.Module = nn.Sigmoid) -> None:
+        """
+        Args:
+            p_ratio: 学習用データにおける正例の割合
+            eta: -1~1の値をとるハイパーパラメータ
+            loss_func: 損失として用いる関数 DefaultはSigmoid
+        """
         self.p_ratio = p_ratio
         self.eta = eta
+        self.loss_func = loss_func
 
     def t_P_index(self, t: Tensor) -> Tensor:
         return torch.maximum(t, torch.zeros_like(t))
@@ -58,11 +58,12 @@ class PNULoss:
 
     def Risk_PNU(self, t: Tensor, y: Tensor) -> Tensor:
         """
-        t: Target as 1 for positive, -1 for negative, and 0 for unlabeled
-        y: Prediction
+        Args:
+            t: 正例なら1, 負例なら-1, ラベルなしなら0をとるターゲット
+            y: モデルの出力
         """
-        t = t.flatten()
-        y = y.flatten()
+        t = t.flatten()  # (_, 1) -> (_)
+        y = y.flatten()  # (_, 1) -> (_)
         if self.eta >= 0:
             return (1 - self.eta) * self.Risk_PN(t, y) + self.eta * self.Risk_PU(t, y)
         else:
@@ -70,16 +71,15 @@ class PNULoss:
 
 
 class Multi_PNULoss:
-    """
-    Args:
-        p_ratio (float): Percentage of belinging to each category
-        eta (float): Hyperparameters that take the values between 0 and 1
-    """
-
-    def __init__(self, loss_func: nn.Module, p_ratio: Tensor, eta: float) -> None:
-        self.loss_func = loss_func
+    def __init__(self, p_ratio: Tensor, eta: float, loss_func: nn.Module = nn.Sigmoid) -> None:
+        """
+        Args:
+            p_ratio: 学習用データにおける各カテゴリの正例の割合
+            eta: 0~1の値をとるハイパーパラメータ
+        """
         self.p_ratio = p_ratio
         self.eta = eta
+        self.loss_func = loss_func
         assert type(self.p_ratio) == torch.Tensor, "p_ratio must be Tensor"
 
     def Risk_P_plus(self, t: Tensor, y: Tensor) -> Tensor:
@@ -112,7 +112,8 @@ class Multi_PNULoss:
 
     def Risk_PNU(self, t: Tensor, y: Tensor) -> Tensor:
         """
-        t: Target
-        y: Prediction
+        Args:
+            t: 正例なら1, 負例なら0をとるターゲット # (_, C) C: カテゴリ数
+            y: モデルの出力 # (_, C)
         """
         return (1 - self.eta) * self.Risk_PN(t, y) + self.eta * self.Risk_PU(t, y)

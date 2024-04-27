@@ -2,7 +2,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from PNU_Loss import Multi_PNULoss, PNULoss
+from pnu_loss import Multi_PNULoss, PNULoss
 
 
 class TestPNULoss:
