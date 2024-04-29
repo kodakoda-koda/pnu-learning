@@ -1,58 +1,69 @@
-from typing import Tuple
+import random
 
-from datasets import load_dataset
-from torch.utils.data import DataLoader, Dataset, Subset
-from transformers import AutoTokenizer
+import pandas as pd
+import torch
+from torch.utils.data import Dataset
 
 
-class Get_DataLoader:
-    def __init__(self, n_classes: int, batch_size: int, model_name: str) -> None:
+class MyDataset(Dataset):
+    def __init__(self, dataset: dict) -> None:
+        super(self, MyDataset).__init__()
         """
         Args:
-            n_classes: 検証するカテゴリ数
-            batch_size: バッチサイズ
-            model_name: モデル名 Tokenizerに使用
+            dataset: dataset dictionary
+            train_flag: train flag
         """
-        self.n_classes = n_classes
-        self.batch_size = batch_size
-        self.model_name = model_name
+        self.dataset = dataset
 
-        self.__read_dataset__()
+    def __getitem__(self, index):
+        input_ids = self.dataset["input_ids"][index]
+        attention_mask = self.dataset["attention_mask"][index]
+        labels = self.dataset["labels"][index]
 
-    def get_loader(self, d_set: str) -> DataLoader:
-        loader = DataLoader(self.dataset[d_set], batch_size=self.batch_size, shuffle=True)
-        return loader
+        return input_ids, attention_mask, labels
 
-    def __read_dataset__(self) -> None:
-        dataset = load_dataset("knowledgator/events_classification_biotech")
-        self.classes = set(i[0] for i in dataset["all_labels"])
-        self.class2id = {class_: id for id, class_ in enumerate(self.classes)}
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+    def __len__(self):
+        return len(self.dataset["input_ids"])
 
-        tokenized_dataset = dataset.map(self.__preprocess__)
-        tokenized_dataset.set_format(type="torch", columns=["input_ids", "token_type_ids", "attention_mask", "labels"])
 
-        tokenized_dataset["train"] = self.__subset__(tokenized_dataset, "train")
-        tokenized_dataset["test"] = self.__subset__(tokenized_dataset, "test")
+def data_preprocess(train_df, test_df, tokenizer, n_classes, unlabel_rate):
+    df = pd.concat([train_df, test_df], axis=0)
+    df = df.dropna(subset=["Title", "Content"])
+    df = pd.concat([df, pd.get_dummies(df["Label 1"], dtype=int)], axis=1)
+    df = df.drop(["Target Organization", "Label 2", "Label 3", "Label 4", "Label 5"], axis=1)
+    df["input"] = df["Title"].str.cat(df["Content"], sep=".\n")
 
-        self.dataset = tokenized_dataset
+    xy_ids = tokenizer.batch_encode_plus(
+        list(df["input"]), truncation=True, max_length=512, padding="max_length", return_tensors="pt"
+    )
 
-    def __preprocess__(self, example: dict) -> dict:
-        text = f"{example['title']}.\n{example['content']}"
-        labels = [0.0 for _ in range(len(self.classes))]
-        label_id = self.class2id[example["all_labels"][0]]
-        labels[label_id] = 1.0
+    labels = torch.tensor(df.drop(["Title", "Content", "Label 1", "input"], axis=1).values)
+    top_indices = torch.argsort(labels.sum(dim=0), descending=True)[:n_classes]
+    indices = [i for i, _ in enumerate(labels.argmax(dim=1)) if _ in top_indices]
+    xy_ids["labels"] = labels
 
-        example = self.tokenizer(text, truncation=True, max_length=512, padding="max_length")
-        example["labels"] = labels
-        return example
+    for k in xy_ids.keys():
+        xy_ids[k] = xy_ids[k][indices]
 
-    def __subset__(self, dataset: Dataset, d_set: str) -> Subset:
-        n_labels = dataset[d_set]["labels"].sum(dim=0)
-        top_indices = []
-        for _ in range(self.n_classes):
-            i = n_labels.argmax().item()
-            n_labels[i] = 0.0
-            top_indices.append(i)
-        indices = [i for i, _ in enumerate(dataset[d_set]["labels"].argmax(dim=1)) if _ in top_indices]
-        return Subset(dataset[d_set], indices=indices)
+    if n_classes == 2:
+        xy_ids["labels"] = xy_ids["labels"][:, top_indices[0]]
+        xy_ids["labels"][xy_ids["labels"] == 0] = -1
+    else:
+        xy_ids["labels"] = xy_ids["labels"][:, top_indices]
+
+    train_xy_ids = {k: v[: int(len(xy_ids["labels"]) * 0.9)] for k, v in xy_ids.items()}
+    test_xy_ids = {k: v[int(len(xy_ids["labels"]) * 0.9) :] for k, v in xy_ids.items()}
+
+    dataset = {"train": train_xy_ids, "test": test_xy_ids}
+
+    unlabel_indices = [False for _ in range(len(train_df) - int(len(train_df) * unlabel_rate))] + [
+        True for _ in range(int(len(train_df) * unlabel_rate))
+    ]
+    random.shuffle(unlabel_indices)
+    dataset["train"]["labels"][unlabel_indices] = torch.zeros([sum(unlabel_indices), n_classes], dtype=int)
+
+    p_ratio = dataset["train"]["labels"].sum(dim=0) / len(dataset["train"]["labels"])
+    if n_classes == 2:
+        p_ratio = p_ratio.item()
+
+    return dataset, p_ratio

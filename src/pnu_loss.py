@@ -3,8 +3,9 @@ import torch.nn as nn
 from torch import Tensor
 
 
-class PNULoss:
-    def __init__(self, p_ratio: float, eta: float, loss_func: nn.Module = nn.Sigmoid) -> None:
+class PNULoss(nn.Module):
+    def __init__(self, p_ratio: float, eta: float, loss_func: nn.Module = nn.Sigmoid()) -> None:
+        super(PNULoss, self).__init__()
         """
         Args:
             p_ratio: 学習用データにおける正例の割合
@@ -56,22 +57,23 @@ class PNULoss:
     def Risk_NU(self, t: Tensor, y: Tensor) -> Tensor:
         return (1 - self.p_ratio) * (self.Risk_N_minus(t, y) - self.Risk_N_plus(t, y)) + self.Risk_U_plus(t, y)
 
-    def Risk_PNU(self, t: Tensor, y: Tensor) -> Tensor:
+    def forward(self, outputs: Tensor, targets: Tensor) -> Tensor:
         """
         Args:
             t: 正例なら1, 負例なら-1, ラベルなしなら0をとるターゲット
             y: モデルの出力
         """
-        t = t.flatten()  # (_, 1) -> (_)
-        y = y.flatten()  # (_, 1) -> (_)
+        targets = targets.flatten()  # (_, 1) -> (_)
+        outputs = outputs.flatten()  # (_, 1) -> (_)
         if self.eta >= 0:
-            return (1 - self.eta) * self.Risk_PN(t, y) + self.eta * self.Risk_PU(t, y)
+            return (1 - self.eta) * self.Risk_PN(targets, outputs) + self.eta * self.Risk_PU(targets, outputs)
         else:
-            return (1 + self.eta) * self.Risk_PN(t, y) - self.eta * self.Risk_NU(t, y)
+            return (1 + self.eta) * self.Risk_PN(targets, outputs) - self.eta * self.Risk_NU(targets, outputs)
 
 
-class Multi_PNULoss:
-    def __init__(self, p_ratio: Tensor, eta: float, loss_func: nn.Module = nn.Sigmoid) -> None:
+class Multi_PNULoss(nn.Module):
+    def __init__(self, p_ratio: Tensor, eta: float, loss_func: nn.Module = nn.Sigmoid()) -> None:
+        super(Multi_PNULoss, self).__init__()
         """
         Args:
             p_ratio: 学習用データにおける各カテゴリの正例の割合
@@ -110,10 +112,10 @@ class Multi_PNULoss:
         risk_PU = self.p_ratio * (self.Risk_P_plus(t, y) - self.Risk_P_minus(t, y)) + self.Risk_U(t, y)
         return risk_PU.sum()
 
-    def Risk_PNU(self, t: Tensor, y: Tensor) -> Tensor:
+    def forward(self, outputs: Tensor, targets: Tensor) -> Tensor:
         """
         Args:
             t: 正例なら1, 負例なら0をとるターゲット # (_, C) C: カテゴリ数
             y: モデルの出力 # (_, C)
         """
-        return (1 - self.eta) * self.Risk_PN(t, y) + self.eta * self.Risk_PU(t, y)
+        return (1 - self.eta) * self.Risk_PN(targets, outputs) + self.eta * self.Risk_PU(targets, outputs)

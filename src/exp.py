@@ -1,10 +1,9 @@
 import numpy as np
 import torch
-from torch import optim
 
 
 class Exp:
-    def __init__(self, train_loader, test_loader, model, loss_func):
+    def __init__(self, train_loader, test_loader, model, loss_func, optimizer):
         """
         Args:
             *_loader: 訓練用または評価用のDataLoader
@@ -15,35 +14,37 @@ class Exp:
         self.test_loader = test_loader
         self.model = model
         self.loss_func = loss_func
+        self.optimizer = optimizer
 
         self.train_losses = []
         self.test_losses = []
 
-    def train(self, n_epochs: int, optimizer: optim):
+    def train(self, epoch: int):
         self.model.train()
-        for epoch in range(n_epochs):
-            losses = []
-            for itr in self.train_loader:
-                optimizer.zero_grad()
+        losses = []
+        for itr in self.train_loader:
+            self.optimizer.zero_grad()
 
-                input_ids = itr["input_ids"]
-                attention_mask = itr["attention_mask"]
-                labels = itr["labels"]
+            input_ids = itr["input_ids"]
+            attention_mask = itr["attention_mask"]
+            labels = itr["labels"]
 
-                output = self.model(input_ids, attention_mask)
-                loss = self.loss_func(labels, output)
+            outputs = self.model(input_ids, attention_mask)
+            loss = self.loss_func(
+                outputs,
+                labels,
+            )
 
-                losses.append(loss.item())
-                loss.backward()
-                optimizer.step()
+            losses.append(loss.item())
+            loss.backward()
+            self.optimizer.step()
 
-            self.train_losses.append(np.mean(losses))
-            self.eval()
+        self.train_losses.append(np.mean(losses))
 
-            print(f"epoch: {epoch}, train loss: {self.train_losses[-1]}, valid loss: {self.test_losses[-1]}")
-            print("=" * 50)
+        print(f"epoch: {epoch}")
+        print(f"  train loss: {self.train_losses[-1]}")
 
-    def eval(self):
+    def test(self):
         self.model.eval()
         losses = []
         with torch.zero_grad:
@@ -52,9 +53,11 @@ class Exp:
                 attention_mask = itr["attention_mask"]
                 labels = itr["labels"]
 
-                output = self.model(input_ids, attention_mask)
+                outputs = self.model(input_ids, attention_mask)
 
-                loss = self.loss_func(labels, output)
-                losses.append(loss)
+                loss = self.loss_func(outputs, labels)
+                losses.append(loss.item())
 
         self.test_losses.append(np.mean(losses))
+        print(f"  test loss: {self.test_losses[-1]}")
+        print("=" * 50)

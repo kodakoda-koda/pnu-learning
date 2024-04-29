@@ -1,9 +1,12 @@
 import argparse
 
+import pandas as pd
+import torch
 from torch.optim import Adam
-from transformers import AutoModel, set_seed
+from torch.utils.data import DataLoader
+from transformers import AutoModel, AutoTokenizer, set_seed
 
-from dataset import Get_DataLoader
+from dataset import MyDataset, data_preprocess
 from exp import Exp
 from pnu_loss import Multi_PNULoss, PNULoss
 
@@ -18,20 +21,34 @@ def main():
     parser.add_argument("--use_multi_loss", action="store_true")
     parser.add_argument("--n_epochs", type=int, default=50)
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--unlabel_rate", type=float, default=0.99)
+    parser.add_argument("--eta", type=float, default=0.1)
     args = parser.parse_args()
 
-    get_loader = Get_DataLoader(n_classe=args.n_classes, batch_size=args.batch_size, model_name=args.model_name)
+    train_df = pd.read_csv("../data/train_df.csv")
+    test_df = pd.read_csv("../data/test_df.csv")
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
 
-    train_loader = get_loader.get_loader("train")
-    test_loader = get_loader.get_loader("test")
+    dataset, p_ratio = data_preprocess(train_df, test_df, tokenizer, args.n_classes, args.unlabel_rate)
+    train_dataset = MyDataset(dataset["train"])
+    test_dataset = MyDataset(dataset["test"])
+
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_nsize, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
     model = AutoModel.from_pretrained(args.model_name)
-    loss_func = Multi_PNULoss if args.use_multi_loss else PNULoss
+    if args.use_multi_loss:
+        loss_func = Multi_PNULoss(p_ratio=p_ratio, eta=args.eta)
+    else:
+        loss_func = PNULoss(p_ratio=p_ratio, eta=args.eta)
     optimizer = Adam(model.parameters(), lr=args.lr)
 
-    exp = Exp(train_loader=train_loader, test_loader=test_loader, model=model, loss_func=loss_func)
+    exp = Exp(train_loader=train_loader, test_loader=test_loader, model=model, loss_func=loss_func, optimizer=optimizer)
 
-    exp.train(
-        n_epochs=args.n_epochs,
-        optimizer=optimizer,
-    )
+    for epoch in range(args.n_epochs):
+        exp.train(epoch=epoch)
+        exp.test()
+
+
+if __name__ == "__main__":
+    main()
