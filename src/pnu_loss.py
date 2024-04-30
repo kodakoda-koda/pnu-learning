@@ -4,8 +4,8 @@ from torch import Tensor
 
 
 class PNULoss(nn.Module):
-    def __init__(self, p_ratio: float, eta: float, loss_func: nn.Module = nn.Sigmoid()) -> None:
-        super(PNULoss, self).__init__()
+    def __init__(self, p_ratio: Tensor, eta: float, loss_func: nn.Module = nn.Sigmoid()) -> None:
+        super().__init__()
         """
         Args:
             p_ratio: 学習用データにおける正例の割合
@@ -49,13 +49,15 @@ class PNULoss(nn.Module):
         return self.Risk(self.t_U_index(t), -y)
 
     def Risk_PN(self, t: Tensor, y: Tensor) -> Tensor:
-        return self.p_ratio * self.Risk_P_plus(t, y) + (1 - self.p_ratio) * self.Risk_N_minus(t, y)
+        assert self.p_ratio.shape == torch.Size([2]), f"p_ratio must be shape as {torch.Size([2])}"
+
+        return self.p_ratio[0] * self.Risk_P_plus(t, y) + self.p_ratio[1] * self.Risk_N_minus(t, y)
 
     def Risk_PU(self, t: Tensor, y: Tensor) -> Tensor:
-        return self.p_ratio * (self.Risk_P_plus(t, y) - self.Risk_P_minus(t, y)) + self.Risk_U_minus(t, y)
+        return self.p_ratio[0] * (self.Risk_P_plus(t, y) - self.Risk_P_minus(t, y)) + self.Risk_U_minus(t, y)
 
     def Risk_NU(self, t: Tensor, y: Tensor) -> Tensor:
-        return (1 - self.p_ratio) * (self.Risk_N_minus(t, y) - self.Risk_N_plus(t, y)) + self.Risk_U_plus(t, y)
+        return self.p_ratio[1] * (self.Risk_N_minus(t, y) - self.Risk_N_plus(t, y)) + self.Risk_U_plus(t, y)
 
     def forward(self, outputs: Tensor, targets: Tensor) -> Tensor:
         """
@@ -73,7 +75,7 @@ class PNULoss(nn.Module):
 
 class Multi_PNULoss(nn.Module):
     def __init__(self, p_ratio: Tensor, eta: float, loss_func: nn.Module = nn.Sigmoid()) -> None:
-        super(Multi_PNULoss, self).__init__()
+        super().__init__()
         """
         Args:
             p_ratio: 学習用データにおける各カテゴリの正例の割合
@@ -82,25 +84,27 @@ class Multi_PNULoss(nn.Module):
         self.p_ratio = p_ratio
         self.eta = eta
         self.loss_func = loss_func
-        assert type(self.p_ratio) == torch.Tensor, "p_ratio must be Tensor"
 
     def Risk_P_plus(self, t: Tensor, y: Tensor) -> Tensor:
         y_plus = y.clone()
-        y_plus[~t.to(torch.bool)] = 0
         n_plus = t.sum(dim=0)
-        return self.loss_func(-y_plus).sum(dim=0) / n_plus
+        loss = self.loss_func(-y_plus)
+        loss[~t.to(torch.bool)] = 0
+        return loss.sum(dim=0) / n_plus
 
     def Risk_P_minus(self, t: Tensor, y: Tensor) -> Tensor:
         y_minus = 1 - y.clone()
-        y_minus[~t.to(torch.bool)] = 0
         n_minus = t.sum(dim=0)
-        return self.loss_func(-y_minus).sum(dim=0) / n_minus
+        loss = self.loss_func(-y_minus)
+        loss[~t.to(torch.bool)] = 0
+        return loss.sum(dim=0) / n_minus
 
     def Risk_U(self, t: Tensor, y: Tensor) -> Tensor:
         y_U = y.clone()
-        y_U[t.sum(dim=1).to(torch.bool)] = 0
         n_U = len(t) - t.sum()
-        return self.loss_func(-y_U).sum(dim=0) / n_U
+        loss = self.loss_func(-y_U)
+        loss[t.sum(dim=1).to(torch.bool)] = 0
+        return loss.sum(dim=0) / n_U
 
     def Risk_PN(self, t: Tensor, y: Tensor) -> Tensor:
         assert self.p_ratio.shape == t.sum(dim=0).shape, f"p_ratio must be shape as {t.sum(dim=0).shape}"

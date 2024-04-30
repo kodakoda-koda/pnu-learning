@@ -7,7 +7,7 @@ from torch.utils.data import Dataset
 
 class MyDataset(Dataset):
     def __init__(self, dataset: dict) -> None:
-        super(self, MyDataset).__init__()
+        super().__init__()
         """
         Args:
             dataset: dataset dictionary
@@ -20,7 +20,7 @@ class MyDataset(Dataset):
         attention_mask = self.dataset["attention_mask"][index]
         labels = self.dataset["labels"][index]
 
-        return input_ids, attention_mask, labels
+        return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
 
     def __len__(self):
         return len(self.dataset["input_ids"])
@@ -46,7 +46,7 @@ def data_preprocess(train_df, test_df, tokenizer, n_classes, unlabel_rate):
         xy_ids[k] = xy_ids[k][indices]
 
     if n_classes == 2:
-        xy_ids["labels"] = xy_ids["labels"][:, top_indices[0]]
+        xy_ids["labels"] = xy_ids["labels"][:, top_indices]
         xy_ids["labels"][xy_ids["labels"] == 0] = -1
     else:
         xy_ids["labels"] = xy_ids["labels"][:, top_indices]
@@ -56,14 +56,13 @@ def data_preprocess(train_df, test_df, tokenizer, n_classes, unlabel_rate):
 
     dataset = {"train": train_xy_ids, "test": test_xy_ids}
 
-    unlabel_indices = [False for _ in range(len(train_df) - int(len(train_df) * unlabel_rate))] + [
-        True for _ in range(int(len(train_df) * unlabel_rate))
-    ]
+    unlabel_indices = [
+        False for _ in range(len(train_xy_ids["labels"]) - int(len(train_xy_ids["labels"]) * unlabel_rate))
+    ] + [True for _ in range(int(len(train_xy_ids["labels"]) * unlabel_rate))]
     random.shuffle(unlabel_indices)
+
     dataset["train"]["labels"][unlabel_indices] = torch.zeros([sum(unlabel_indices), n_classes], dtype=int)
 
-    p_ratio = dataset["train"]["labels"].sum(dim=0) / len(dataset["train"]["labels"])
-    if n_classes == 2:
-        p_ratio = p_ratio.item()
+    p_ratio = (dataset["train"]["labels"] == 1).sum(dim=0) / len(dataset["train"]["labels"])
 
     return dataset, p_ratio
