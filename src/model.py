@@ -10,11 +10,11 @@ class CustomModelForSequenceClassification(BertForSequenceClassification):
 
         self.bert = BertModel(config)
 
+        self.linear = nn.Linear(config.hidden_size, config.num_labels)
         if self.num_labels == 2:
             self.activation = nn.Tanh()
         else:
             self.activation = nn.ReLU()
-        self.linear = nn.Linear(config.hidden_size, config.num_labels)
 
     def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, labels=None, **kwargs):
 
@@ -25,7 +25,7 @@ class CustomModelForSequenceClassification(BertForSequenceClassification):
             **kwargs,
         )
 
-        hidden_state = self.activation(outputs.last_hidden_state[:, 0, :])
+        hidden_state = outputs.last_hidden_state[:, 0, :]
         logits = self.activation(self.linear(hidden_state))
 
         loss = None

@@ -1,5 +1,7 @@
 import argparse
+import os
 
+import numpy as np
 import pandas as pd
 import torch
 from torch.optim import Adam
@@ -18,13 +20,14 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str, default="./data/")
+    parser.add_argument("--output_file", type=str, default="./output/results.csv")
     parser.add_argument("--n_classes", type=int, default=2)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--model_name", type=str, default="bert-base-uncased")
     parser.add_argument("--use_multi_loss", action="store_true")
-    parser.add_argument("--n_epochs", type=int, default=50)
-    parser.add_argument("--lr", type=float, default=1e-5)
-    parser.add_argument("--unlabel_rate", type=float, default=0.1)
+    parser.add_argument("--n_epochs", type=int, default=20)
+    parser.add_argument("--lr", type=float, default=5e-6)
+    parser.add_argument("--unlabel_rate", type=float, default=0.99)
     parser.add_argument("--eta", type=float, default=0.2)
     args = parser.parse_args()
 
@@ -62,9 +65,22 @@ def main():
     )
 
     for epoch in range(args.n_epochs):
-        print(f"epoch: {epoch}")
+        print(f"epoch: {epoch+1}")
         exp.train()
         exp.test()
+
+    if os.path.exists(args.output_file):
+        results = pd.read_csv(args.output_file)
+    else:
+        results = pd.DataFrame()
+    result = {}
+    result["n_classes"] = args.n_classes
+    result["use_multi_loss"] = args.use_multi_loss
+    result["unlabel_rate"] = args.unlabel_rate
+    result["epoch"] = np.argmax(exp.test_acc) + 1
+    result["accuracy"] = np.max(exp.test_acc)
+    results = pd.concat([results, pd.DataFrame([result])], ignore_index=True)
+    results.to_csv(args.output_file, index=False)
 
 
 if __name__ == "__main__":

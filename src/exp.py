@@ -21,7 +21,7 @@ class Exp:
         self.device = device
 
         self.train_losses = []
-        self.test_losses = []
+        self.test_acc = []
 
     def train(self):
         self.model.train()
@@ -71,6 +71,7 @@ class Exp:
         labels = np.concatenate(labels)
         outputs = self.round_(outputs)
         acc = accuracy_score(labels, outputs)
+        self.test_acc.append(acc)
         print(f"test accuracy: {acc}")
         print("=" * 50)
 
