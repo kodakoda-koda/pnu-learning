@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 
 import numpy as np
@@ -20,14 +21,13 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str, default="./data/")
-    parser.add_argument("--output_file", type=str, default="./output/results.csv")
-    parser.add_argument("--n_classes", type=int, default=2)
+    parser.add_argument("--output_path", type=str, default="./output/")
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--model_name", type=str, default="bert-base-uncased")
     parser.add_argument("--use_multi_loss", action="store_true")
     parser.add_argument("--n_epochs", type=int, default=20)
     parser.add_argument("--lr", type=float, default=5e-6)
-    parser.add_argument("--unlabel_rate", type=float, default=0.99)
+    parser.add_argument("--unlabel_rate", type=float, default=0.9)
     parser.add_argument("--eta", type=float, default=0.2)
     args = parser.parse_args()
 
@@ -35,7 +35,7 @@ def main():
     test_df = pd.read_csv(args.data_path + "test.csv", index_col=0)
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
 
-    dataset, p_ratio = data_preprocess(train_df, test_df, tokenizer, args.n_classes, args.unlabel_rate)
+    dataset, p_ratio = data_preprocess(train_df, test_df, tokenizer, args.unlabel_rate)
     train_dataset = MyDataset(dataset["train"])
     test_dataset = MyDataset(dataset["test"])
 
@@ -44,7 +44,7 @@ def main():
 
     model = CustomModelForSequenceClassification.from_pretrained(
         args.model_name,
-        num_labels=args.n_classes,
+        num_labels=2,
         output_attentions=False,
     ).to(device)
 
@@ -60,7 +60,6 @@ def main():
         model=model,
         loss_func=loss_func,
         optimizer=optimizer,
-        n_classes=args.n_classes,
         device=device,
     )
 
@@ -69,18 +68,10 @@ def main():
         exp.train()
         exp.test()
 
-    if os.path.exists(args.output_file):
-        results = pd.read_csv(args.output_file)
-    else:
-        results = pd.DataFrame()
-    result = {}
-    result["n_classes"] = args.n_classes
-    result["use_multi_loss"] = args.use_multi_loss
-    result["unlabel_rate"] = args.unlabel_rate
-    result["epoch"] = np.argmax(exp.test_acc) + 1
-    result["accuracy"] = np.max(exp.test_acc)
-    results = pd.concat([results, pd.DataFrame([result])], ignore_index=True)
-    results.to_csv(args.output_file, index=False)
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
+    with open(args.output_path + f"{args.unlabel_rate}_{args.eta}.json", "w") as f:
+        json.dump(exp.test_acc, f)
 
 
 if __name__ == "__main__":

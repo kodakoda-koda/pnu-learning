@@ -11,10 +11,7 @@ class CustomModelForSequenceClassification(BertForSequenceClassification):
         self.bert = BertModel(config)
 
         self.linear = nn.Linear(config.hidden_size, config.num_labels)
-        if self.num_labels == 2:
-            self.activation = nn.Tanh()
-        else:
-            self.activation = nn.ReLU()
+        self.activation = nn.Tanh()
 
     def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, labels=None, **kwargs):
 

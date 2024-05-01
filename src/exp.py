@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 
 class Exp:
-    def __init__(self, train_loader, test_loader, model, loss_func, optimizer, n_classes, device):
+    def __init__(self, train_loader, test_loader, model, loss_func, optimizer, device):
         """
         Args:
             *_loader: 訓練用または評価用のDataLoader
@@ -17,7 +17,6 @@ class Exp:
         self.model = model
         self.loss_func = loss_func
         self.optimizer = optimizer
-        self.n_classes = n_classes
         self.device = device
 
         self.train_losses = []
@@ -34,9 +33,8 @@ class Exp:
             label = itr["labels"].to(self.device)
 
             output = self.model(input_ids, attention_mask).logits
-            if self.n_classes == 2:
-                label = label[:, 0]
-                output = output[:, 0]
+            label = label[:, 0]
+            output = output[:, 0]
 
             loss = self.loss_func(output, label)
             losses.append(loss.item())
@@ -58,9 +56,8 @@ class Exp:
                 label = itr["labels"].to(self.device)
 
                 output = self.model(input_ids, attention_mask).logits
-                if self.n_classes == 2:
-                    label = label[:, 0]
-                    output = output[:, 0]
+                label = label[:, 0]
+                output = output[:, 0]
 
                 output = output.detach().cpu().numpy()
                 label = label.detach().cpu().numpy()

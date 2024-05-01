@@ -26,7 +26,7 @@ class MyDataset(Dataset):
         return len(self.dataset["input_ids"])
 
 
-def data_preprocess(train_df, test_df, tokenizer, n_classes, unlabel_rate):
+def data_preprocess(train_df, test_df, tokenizer, unlabel_rate):
     df = pd.concat([train_df, test_df], axis=0)
     df = df.dropna(subset=["Title", "Content"])
     df = pd.concat([df, pd.get_dummies(df["Label 1"], dtype=int)], axis=1)
@@ -38,18 +38,15 @@ def data_preprocess(train_df, test_df, tokenizer, n_classes, unlabel_rate):
     )
 
     labels = torch.tensor(df.drop(["Title", "Content", "Label 1", "input"], axis=1).values)
-    top_indices = torch.argsort(labels.sum(dim=0), descending=True)[:n_classes]
+    top_indices = torch.argsort(labels.sum(dim=0), descending=True)[:2]
     indices = [i for i, _ in enumerate(labels.argmax(dim=1)) if _ in top_indices]
     xy_ids["labels"] = labels
 
     for k in xy_ids.keys():
         xy_ids[k] = xy_ids[k][indices]
 
-    if n_classes == 2:
-        xy_ids["labels"] = xy_ids["labels"][:, top_indices]
-        xy_ids["labels"][xy_ids["labels"] == 0] = -1
-    else:
-        xy_ids["labels"] = xy_ids["labels"][:, top_indices]
+    xy_ids["labels"] = xy_ids["labels"][:, top_indices]
+    xy_ids["labels"][xy_ids["labels"] == 0] = -1
 
     train_xy_ids = {k: v[: int(len(xy_ids["labels"]) * 0.9)] for k, v in xy_ids.items()}
     test_xy_ids = {k: v[int(len(xy_ids["labels"]) * 0.9) :] for k, v in xy_ids.items()}
@@ -61,7 +58,7 @@ def data_preprocess(train_df, test_df, tokenizer, n_classes, unlabel_rate):
     ] + [True for _ in range(int(len(train_xy_ids["labels"]) * unlabel_rate))]
     random.shuffle(unlabel_indices)
 
-    dataset["train"]["labels"][unlabel_indices] = torch.zeros([sum(unlabel_indices), n_classes], dtype=int)
+    dataset["train"]["labels"][unlabel_indices] = torch.zeros([sum(unlabel_indices), 2], dtype=int)
 
     p_ratio = (dataset["train"]["labels"] == 1).sum(dim=0) / len(dataset["train"]["labels"])
 
