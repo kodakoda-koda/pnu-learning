@@ -11,6 +11,8 @@ class Exp:
             *_loader: 訓練用または評価用のDataLoader
             model: モデル
             loss_func: 損失関数, PNULoss
+            optimizer: 最適化手法, Adam
+            device: デバイス, cuda or cpu
         """
         self.train_loader = train_loader
         self.test_loader = test_loader
@@ -24,6 +26,7 @@ class Exp:
 
     def train(self):
         self.model.train()
+
         losses = []
         for itr in tqdm(self.train_loader):
             self.optimizer.zero_grad()
@@ -47,6 +50,7 @@ class Exp:
 
     def test(self):
         self.model.eval()
+
         outputs = []
         labels = []
         with torch.no_grad():
@@ -69,6 +73,7 @@ class Exp:
         outputs = self.round_(outputs)
         acc = accuracy_score(labels, outputs)
         self.test_acc.append(acc)
+
         print(f"test accuracy: {acc}")
         print("=" * 50)
 

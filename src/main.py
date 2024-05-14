@@ -2,7 +2,6 @@ import argparse
 import json
 import os
 
-import numpy as np
 import pandas as pd
 import torch
 from torch.optim import Adam
@@ -12,7 +11,7 @@ from transformers import AutoTokenizer, set_seed
 from dataset import MyDataset, data_preprocess
 from exp import Exp
 from model import CustomModelForSequenceClassification
-from pnu_loss import Multi_PNULoss, PNULoss
+from pnu_loss import PNULoss
 
 
 def main():
@@ -24,7 +23,6 @@ def main():
     parser.add_argument("--output_path", type=str, default="./output/")
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--model_name", type=str, default="bert-base-uncased")
-    parser.add_argument("--use_multi_loss", action="store_true")
     parser.add_argument("--n_epochs", type=int, default=20)
     parser.add_argument("--lr", type=float, default=5e-6)
     parser.add_argument("--unlabel_rate", type=float, default=0.9)
@@ -48,10 +46,7 @@ def main():
         output_attentions=False,
     ).to(device)
 
-    if args.use_multi_loss:
-        loss_func = Multi_PNULoss(p_ratio=p_ratio, eta=args.eta)
-    else:
-        loss_func = PNULoss(p_ratio=p_ratio, eta=args.eta)
+    loss_func = PNULoss(p_ratio=p_ratio, eta=args.eta)
     optimizer = Adam(model.parameters(), lr=args.lr)
 
     exp = Exp(
