@@ -1,5 +1,5 @@
 # PNU Learning
-hogehogeで使用したコード
+[PNU Learningの検証と考察](https://kodakoda-koda.github.io/posts/PNULearning/)で使用したコード
 
 ## 実行方法
 ### 1. ライブラリをインストール
